@@ -7,25 +7,26 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 )
 
-type Priority uint8
+type priority uint8
 
 const (
-	VeryHigh Priority = iota
-	High
-	Standard
-	Low
-	VeryLow
+	veryHigh priority = iota
+	high
+	standard
+	low
+	veryLow
 )
 
-type Status uint8
+type status uint8
 
 const (
-	Open Status = iota
-	InProgress
-	Done
+	open status = iota
+	inProgress
+	done
 )
 
 // Task is a task.
@@ -34,41 +35,37 @@ type Task struct {
 	Title    string
 	Text     string
 	Duration float64
-	Priority Priority
-	Status   Status
+	Priority priority
+	Status   status
 }
 
-var pause float64 = 10
+var pause time.Duration = 5 * time.Minute
 
 func main() {
 	tasks := []Task{}
 
 	// Parse
-	file, err := os.Open("input.csv")
-	if err != nil {
-		// err is printable
-		// elements passed are separated by space automatically
-		fmt.Println("Error:", err)
-		return
+	filename := "input.csv"
+	if len(os.Args) > 1 {
+		filename = os.Args[1]
 	}
-	// automatically call Close() at the end of current method
+	file, err := os.Open(filename)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 	defer file.Close()
-	//
+
 	reader := csv.NewReader(file)
-	// options are available at:
-	// http://golang.org/src/pkg/encoding/csv/reader.go?s=3213:3671#L94
-	//reader.Comma = ','
 	lineCount := 0
 	for {
 		lineCount++
-		// read just one record, but we could ReadAll() as well
 		record, err := reader.Read()
-		// end-of-file is fitted into err
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			fmt.Println("Error:", err)
-			return
+			fmt.Println(err)
+			os.Exit(2)
 		}
 		if lineCount == 1 {
 			continue
@@ -83,42 +80,47 @@ func main() {
 
 		switch strings.ToLower(record[4]) {
 		case "very high":
-			task.Priority = VeryHigh
+			task.Priority = veryHigh
 		case "high":
-			task.Priority = High
+			task.Priority = high
 		case "standard":
-			task.Priority = Standard
+			task.Priority = standard
 		case "low":
-			task.Priority = Low
+			task.Priority = low
 		case "very low":
-			task.Priority = VeryLow
+			task.Priority = veryLow
 		}
 
 		switch strings.ToLower(record[5]) {
 		case "open":
-			task.Status = Open
+			task.Status = open
 		case "inprogress":
-			task.Status = InProgress
+			task.Status = inProgress
 		case "done":
-			task.Status = Done
+			task.Status = done
 		}
 		tasks = append(tasks, task)
 	}
-	// Sort
+	// TODO sort
 
-	// Output
+	// output
 	now := time.Now()
 	start := now
 	const layout = "15:04"
+	w := tabwriter.NewWriter(os.Stdout, 0, 1, 3, ' ', 0)
+	if len(tasks) > 0 {
+		fmt.Fprintln(w, "Prio\tTitle\tText\tDuration\tEnd\t")
+	}
 	for _, task := range tasks {
-		if task.Status == Done {
+		if task.Status == done {
 			continue
 		}
-		start = start.Add(time.Duration(task.Duration) * time.Minute).Add(time.Duration(pause) * time.Minute)
+		start = start.Add(time.Duration(task.Duration) * time.Minute).Add(pause)
 		marker := ""
-		if task.Priority >= High {
+		if task.Priority >= high {
 			marker = "! "
 		}
-		fmt.Printf("%s%s – %s [%.0f minutes, due at %s]\n", marker, task.Title, task.Text, task.Duration, start.Format(layout))
+		fmt.Fprintln(w, fmt.Sprintf("%s\t%s\t%s\t%.0f Minutes\t%s\t", marker, task.Title, task.Text, task.Duration, start.Format(layout)))
 	}
+	w.Flush()
 }
